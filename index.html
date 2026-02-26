@@ -1,483 +1,82 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AIsubtext — Command Center</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg:      #0a0a0f;
-      --surface: #111118;
-      --border:  #1e1e2e;
-      --accent:  #00ff88;
-      --accent2: #0088ff;
-      --warn:    #ff6b35;
-      --text:    #f0f0ff;
-      --muted:   #9a9ab8;
-      --mono:    'IBM Plex Mono', monospace;
-      --sans:    'Space Grotesk', sans-serif;
-    }
-    html, body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
-    body::before {
-      content: ''; position: fixed; inset: 0;
-      background-image: linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
-      background-size: 40px 40px; pointer-events: none; z-index: 0;
-    }
-    .container { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 24px; }
-    header { border-bottom: 1px solid var(--border); padding: 20px 0; position: sticky; top: 0; background: rgba(10,10,15,0.95); backdrop-filter: blur(12px); z-index: 100; }
-    .header-inner { display: flex; align-items: center; justify-content: space-between; }
-    .logo { display: flex; align-items: center; gap: 12px; }
-    .logo-mark { width: 32px; height: 32px; border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 14px; color: var(--accent); font-weight: 600; }
-    .logo-text { font-size: 16px; font-weight: 600; }
-    .logo-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
-    .status-bar { display: flex; align-items: center; gap: 24px; }
-    .status-pill { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
-    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
-    .status-dot.offline { background: var(--warn); }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-    main { padding: 32px 0 80px; }
-    .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-    .section-label { font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: 3px; text-transform: uppercase; white-space: nowrap; }
-    .section-line { flex: 1; height: 1px; background: var(--border); }
-    .scores-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px; }
-    .score-card { background: var(--surface); border: 1px solid var(--border); padding: 24px; position: relative; overflow: hidden; transition: border-color 0.2s; }
-    .score-card:hover { border-color: var(--accent); }
-    .score-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); transform:scaleX(0); transform-origin:left; transition:transform 0.4s; }
-    .score-card:hover::before { transform:scaleX(1); }
-    .platform-name { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; }
-    .score-number { font-size: 52px; font-weight: 700; line-height: 1; margin-bottom: 8px; }
-    .score-number.low { color: var(--warn); }
-    .score-number.medium { color: #ffcc00; }
-    .score-number.high { color: var(--accent); }
-    .score-bar-track { height: 3px; background: var(--border); margin-bottom: 12px; }
-    .score-bar-fill { height: 100%; transition: width 1s ease; }
-    .score-delta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-    .chart-container { background: var(--surface); border: 1px solid var(--border); padding: 32px; margin-bottom: 40px; }
-    .chart-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
-    .chart-title { font-size: 18px; font-weight: 600; }
-    .chart-legend { display: flex; gap: 16px; }
-    .legend-item { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
-    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-    canvas { max-height: 280px; }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
-    .panel { background: var(--surface); border: 1px solid var(--border); }
-    .panel-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-    .panel-title { font-size: 14px; font-weight: 600; }
-    .badge { font-family: var(--mono); font-size: 10px; padding: 3px 8px; background: rgba(0,255,136,0.1); color: var(--accent); border: 1px solid rgba(0,255,136,0.2); }
-    .correction-item { padding: 16px 24px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
-    .correction-item:hover { background: rgba(255,255,255,0.02); }
-    .correction-item:last-child { border-bottom: none; }
-    .correction-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .platform-tag { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border: 1px solid var(--border); color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-    .score-tag { font-family: var(--mono); font-size: 10px; color: var(--warn); }
-    .correction-question { font-size: 13px; color: var(--text); margin-bottom: 8px; line-height: 1.4; }
-    .correction-preview { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
-    .correction-actions { display: flex; gap: 8px; }
-    .btn { font-family: var(--mono); font-size: 10px; padding: 6px 14px; border: 1px solid; cursor: pointer; letter-spacing: 1px; text-transform: uppercase; transition: all 0.15s; background: transparent; }
-    .btn-approve { border-color: var(--accent); color: var(--accent); }
-    .btn-approve:hover { background: var(--accent); color: var(--bg); }
-    .btn-reject { border-color: var(--border); color: var(--muted); }
-    .btn-reject:hover { border-color: var(--warn); color: var(--warn); }
-    .btn-approved { border-color: var(--accent); background: rgba(0,255,136,0.15); color: var(--accent); cursor: default; }
-    .btn-rejected { border-color: var(--warn); color: var(--warn); cursor: default; }
-    .run-panel { background: var(--surface); border: 1px solid var(--border); }
-    .run-item { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-    .run-item:last-child { border-bottom: none; }
-    .run-info { flex: 1; }
-    .run-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-    .run-desc { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-    .run-last { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-right: 16px; text-align: right; min-width: 80px; }
-    .btn-run { font-family: var(--mono); font-size: 10px; padding: 8px 20px; border: 1px solid var(--accent2); color: var(--accent2); cursor: pointer; letter-spacing: 1px; text-transform: uppercase; background: transparent; transition: all 0.15s; white-space: nowrap; }
-    .btn-run:hover { background: var(--accent2); color: var(--bg); }
-    .btn-run:disabled { border-color: var(--muted); color: var(--muted); cursor: not-allowed; animation: blink 1s infinite; }
-    .btn-run.all-btn { border-color: var(--accent); color: var(--accent); }
-    .btn-run.all-btn:hover { background: var(--accent); color: var(--bg); }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
-    .terminal { background: #050508; border: 1px solid var(--border); padding: 20px 24px; font-family: var(--mono); font-size: 12px; line-height: 1.8; min-height: 180px; max-height: 260px; overflow-y: auto; margin-top: 16px; }
-    .log-line { display: flex; gap: 12px; }
-    .log-time { color: var(--muted); white-space: nowrap; }
-    .log-msg { color: var(--text); }
-    .log-msg.success { color: var(--accent); }
-    .log-msg.error { color: var(--warn); }
-    .log-msg.info { color: var(--accent2); }
-    .dim-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 24px; }
-    .dim-name { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
-    .dim-bars { display: flex; flex-direction: column; gap: 8px; }
-    .dim-bar-row { display: flex; align-items: center; gap: 10px; }
-    .dim-platform { font-family: var(--mono); font-size: 9px; color: var(--muted); width: 60px; text-transform: uppercase; }
-    .dim-bar-track { flex: 1; height: 4px; background: var(--border); }
-    .dim-bar-fill { height: 100%; }
-    .dim-score { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 28px; text-align: right; }
-    .empty-state { padding: 40px 24px; text-align: center; font-family: var(--mono); font-size: 12px; color: var(--muted); }
-    .server-notice { background: rgba(255,107,53,0.1); border: 1px solid rgba(255,107,53,0.3); padding: 12px 20px; font-family: var(--mono); font-size: 11px; color: var(--warn); margin-bottom: 24px; display: none; }
-    @media (max-width: 900px) { .scores-grid{grid-template-columns:repeat(2,1fr)} .two-col{grid-template-columns:1fr} .dim-grid{grid-template-columns:repeat(2,1fr)} }
-  </style>
-</head>
-<body>
+// scheduler.js - v1.0.0
+// AIsubtext Autonomous Scheduler
+// Runs the full loop automatically every 7 days
+// Setup: node scheduler.js
+// To run as background process: nohup node scheduler.js &
 
-<header>
-  <div class="container">
-    <div class="header-inner">
-      <div class="logo">
-        <div class="logo-mark">AI</div>
-        <div>
-          <div class="logo-text">AIsubtext</div>
-          <div class="logo-sub">Command Center</div>
-        </div>
-      </div>
-      <div class="status-bar">
-        <div class="status-pill">
-          <div class="status-dot" id="server-dot"></div>
-          <span id="server-status">Connecting...</span>
-        </div>
-        <div class="status-pill" id="last-run-display">Last run: —</div>
-      </div>
-    </div>
-  </div>
-</header>
+import { spawn } from "child_process";
+import { writeFileSync, appendFileSync, existsSync } from "fs";
+import * as dotenv from "dotenv";
+dotenv.config();
 
-<main>
-  <div class="container">
-
-    <div class="server-notice" id="server-notice">
-      ⚠ server.js is not running — start it with: <strong>node server.js</strong> in your AIsubtext_monitor folder
-    </div>
-
-    <div class="section-header">
-      <span class="section-label">AI Visibility Scores</span>
-      <div class="section-line"></div>
-      <span class="section-label" id="run-date">Loading...</span>
-    </div>
-    <div class="scores-grid" id="scores-grid">
-      <div class="score-card"><div class="platform-name">CHATGPT</div><div class="score-number low">—</div></div>
-      <div class="score-card"><div class="platform-name">CLAUDE</div><div class="score-number low">—</div></div>
-      <div class="score-card"><div class="platform-name">GEMINI</div><div class="score-number low">—</div></div>
-      <div class="score-card"><div class="platform-name">PERPLEXITY</div><div class="score-number low">—</div></div>
-    </div>
-
-    <div class="chart-container">
-      <div class="chart-header">
-        <div>
-          <div class="chart-title">Score History</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px">AI Visibility Score over time</div>
-        </div>
-        <div class="chart-legend" id="chart-legend"></div>
-      </div>
-      <canvas id="scoreChart"></canvas>
-    </div>
-
-    <div class="chart-container" style="margin-bottom:40px">
-      <div class="section-header" style="margin-bottom:0">
-        <span class="section-label">Dimension Breakdown</span>
-        <div class="section-line"></div>
-      </div>
-      <div class="dim-grid" id="dim-grid"></div>
-    </div>
-
-    <div class="two-col">
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">Corrections</div>
-          <div class="badge" id="corrections-count">Loading...</div>
-        </div>
-        <div id="corrections-list"><div class="empty-state">Loading corrections...</div></div>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:0">
-        <div class="run-panel">
-          <div class="panel-header"><div class="panel-title">Agent Controls</div></div>
-          <div class="run-item">
-            <div class="run-info">
-              <div class="run-name">monitor.js</div>
-              <div class="run-desc">Query 4 LLMs → score → save CSV</div>
-            </div>
-            <div class="run-last" id="monitor-last">—</div>
-            <button class="btn-run" id="btn-monitor" onclick="runScript('monitor')">▶ Run</button>
-          </div>
-          <div class="run-item">
-            <div class="run-info">
-              <div class="run-name">agent.js</div>
-              <div class="run-desc">Analyze gaps → draft corrections</div>
-            </div>
-            <div class="run-last" id="agent-last">—</div>
-            <button class="btn-run" id="btn-agent" onclick="runScript('agent')">▶ Run</button>
-          </div>
-          <div class="run-item">
-            <div class="run-info">
-              <div class="run-name">publisher.js</div>
-              <div class="run-desc">Verify → push to GitHub</div>
-            </div>
-            <div class="run-last" id="publisher-last">—</div>
-            <button class="btn-run" id="btn-publisher" onclick="runScript('publisher')">▶ Run</button>
-          </div>
-          <div class="run-item">
-            <div class="run-info">
-              <div class="run-name">Full Loop</div>
-              <div class="run-desc">Monitor → Agent → Publisher</div>
-            </div>
-            <div class="run-last"></div>
-            <button class="btn-run all-btn" id="btn-all" onclick="runScript('all')">▶ Run All</button>
-          </div>
-        </div>
-        <div class="terminal" id="terminal">
-          <div class="log-line"><span class="log-time">--:--:--</span><span class="log-msg info">AIsubtext Command Center ready</span></div>
-          <div class="log-line"><span class="log-time">--:--:--</span><span class="log-msg">Connecting to server.js...</span></div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</main>
-
-<script>
-const API = "https://aisubtext-monitor-production.up.railway.app";
-const PLATFORM_COLORS = {
-  ChatGPT: "#00ff88", Claude: "#ff6b35", Gemini: "#0088ff", Perplexity: "#cc88ff"
+const CONFIG = {
+  intervalDays: 7,
+  logFile: "./results/scheduler.log",
+  scripts: ["monitor.js", "agent.js", "publisher.js"],
 };
-let chartInstance = null;
-let serverOnline = false;
 
-// ── LOG ───────────────────────────────────────────────────────────────────────
-function log(msg, type = "") {
-  const terminal = document.getElementById("terminal");
-  const time = new Date().toTimeString().substring(0, 8);
-  const line = document.createElement("div");
-  line.className = "log-line";
-  line.innerHTML = `<span class="log-time">${time}</span><span class="log-msg ${type}">${msg}</span>`;
-  terminal.appendChild(line);
-  terminal.scrollTop = terminal.scrollHeight;
+function log(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}`;
+  console.log(line);
+  appendFileSync(CONFIG.logFile, line + "\n");
 }
 
-// ── SERVER STATUS ─────────────────────────────────────────────────────────────
-async function checkServer() {
-  try {
-    const res = await fetch(`${API}/api/status`, { signal: AbortSignal.timeout(3000) });
-    if (res.ok) {
-      serverOnline = true;
-      document.getElementById("server-dot").classList.remove("offline");
-      document.getElementById("server-status").textContent = "Agent Online";
-      document.getElementById("server-notice").style.display = "none";
-      return true;
-    }
-  } catch (e) {}
-  serverOnline = false;
-  document.getElementById("server-dot").classList.add("offline");
-  document.getElementById("server-status").textContent = "Server Offline";
-  document.getElementById("server-notice").style.display = "block";
-  log("server.js not running — start with: node server.js", "error");
-  return false;
-}
+function runScript(script) {
+  return new Promise((resolve, reject) => {
+    log(`▶ Starting ${script}...`);
+    const proc = spawn("node", [script], { stdio: "pipe" });
 
-// ── LOAD SCORES ───────────────────────────────────────────────────────────────
-async function loadScores() {
-  try {
-    const res = await fetch(`${API}/api/scores`);
-    const data = await res.json();
-    renderScoreCards(data.dimensions);
-    renderChart(data.history);
-    renderDimensions(data.dimensions);
-    if (data.latestDate) {
-      document.getElementById("run-date").textContent = `Latest: ${data.latestDate}`;
-      document.getElementById("last-run-display").textContent = `Last run: ${data.latestDate}`;
-    }
-  } catch (e) {
-    log("Could not load scores — is server.js running?", "error");
-  }
-}
+    let output = "";
+    proc.stdout.on("data", d => { output += d; process.stdout.write(d); });
+    proc.stderr.on("data", d => { process.stderr.write(d); });
 
-// ── SCORE CARDS ───────────────────────────────────────────────────────────────
-function renderScoreCards(dimensions) {
-  if (!dimensions || !Object.keys(dimensions).length) return;
-  const grid = document.getElementById("scores-grid");
-  grid.innerHTML = Object.entries(dimensions).map(([platform, data]) => {
-    const cls = data.overall >= 60 ? "high" : data.overall >= 30 ? "medium" : "low";
-    return `
-      <div class="score-card">
-        <div class="platform-name">${platform}</div>
-        <div class="score-number ${cls}">${data.overall}</div>
-        <div class="score-bar-track">
-          <div class="score-bar-fill" style="width:${data.overall}%;background:${PLATFORM_COLORS[platform]}"></div>
-        </div>
-        <div class="score-delta">/100 · AI Visibility Score</div>
-      </div>`;
-  }).join("");
-}
-
-// ── CHART ─────────────────────────────────────────────────────────────────────
-function renderChart(history) {
-  if (!history?.length) return;
-  const ctx = document.getElementById("scoreChart").getContext("2d");
-  const platforms = Object.keys(PLATFORM_COLORS);
-
-  document.getElementById("chart-legend").innerHTML = platforms.map(p => `
-    <div class="legend-item">
-      <div class="legend-dot" style="background:${PLATFORM_COLORS[p]}"></div>${p}
-    </div>`).join("");
-
-  if (chartInstance) chartInstance.destroy();
-  chartInstance = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: history.map(d => d.date),
-      datasets: platforms.map(p => ({
-        label: p, data: history.map(d => d[p] ?? null),
-        borderColor: PLATFORM_COLORS[p],
-        backgroundColor: PLATFORM_COLORS[p] + "15",
-        borderWidth: 2, pointRadius: 4,
-        pointBackgroundColor: PLATFORM_COLORS[p],
-        tension: 0.3, fill: false, spanGaps: true,
-      }))
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: "#111118", borderColor: "#1e1e2e", borderWidth: 1,
-        titleColor: "#f0f0ff", bodyColor: "#9a9ab8",
-        titleFont: { family: "IBM Plex Mono" }, bodyFont: { family: "IBM Plex Mono", size: 11 },
-      }},
-      scales: {
-        x: { grid: { color: "#1e1e2e" }, ticks: { color: "#9a9ab8", font: { family: "IBM Plex Mono", size: 10 } } },
-        y: { min: 0, max: 100, grid: { color: "#1e1e2e" }, ticks: { color: "#9a9ab8", font: { family: "IBM Plex Mono", size: 10 } } }
+    proc.on("close", code => {
+      if (code === 0) {
+        log(`✅ ${script} completed`);
+        resolve(output);
+      } else {
+        log(`❌ ${script} failed with code ${code}`);
+        reject(new Error(`${script} exited with code ${code}`));
       }
-    }
+    });
   });
 }
 
-// ── DIMENSIONS ────────────────────────────────────────────────────────────────
-function renderDimensions(dimensions) {
-  if (!dimensions) return;
-  const dims = [
-    { key: "category",    label: "Category Accuracy" },
-    { key: "explanation", label: "Explanation Quality" },
-    { key: "context",     label: "Context Relevance" },
-    { key: "features",    label: "Feature Recognition" },
-  ];
-  document.getElementById("dim-grid").innerHTML = dims.map(dim => `
-    <div>
-      <div class="dim-name">${dim.label}</div>
-      <div class="dim-bars">
-        ${Object.entries(dimensions).map(([p, d]) => `
-          <div class="dim-bar-row">
-            <div class="dim-platform">${p.substring(0,6)}</div>
-            <div class="dim-bar-track">
-              <div class="dim-bar-fill" style="width:${d[dim.key]||0}%;background:${PLATFORM_COLORS[p]}"></div>
-            </div>
-            <div class="dim-score">${d[dim.key]||0}</div>
-          </div>`).join("")}
-      </div>
-    </div>`).join("");
-}
+async function runFullLoop() {
+  log("════════════════════════════════════");
+  log("🤖 AIsubtext Autonomous Loop Starting");
+  log("════════════════════════════════════");
 
-// ── CORRECTIONS ───────────────────────────────────────────────────────────────
-async function loadCorrections() {
-  try {
-    const res = await fetch(`${API}/api/corrections`);
-    const data = await res.json();
-    renderCorrections(data.corrections || []);
-  } catch (e) {
-    document.getElementById("corrections-list").innerHTML = 
-      '<div class="empty-state">Run agent.js to generate corrections</div>';
-    document.getElementById("corrections-count").textContent = "0 pending";
-  }
-}
-
-function renderCorrections(corrections) {
-  const list = document.getElementById("corrections-list");
-  const approved = corrections.filter(c => c.status === "approved").length;
-  const rejected = corrections.filter(c => c.status === "rejected").length;
-  const pending  = corrections.filter(c => c.status === "pending").length;
-
-  document.getElementById("corrections-count").textContent =
-    `${approved} approved · ${rejected} rejected · ${pending} pending`;
-
-  if (!corrections.length) {
-    list.innerHTML = '<div class="empty-state">No corrections — run agent.js first</div>';
-    return;
-  }
-
-  list.innerHTML = corrections.map((c, i) => `
-    <div class="correction-item">
-      <div class="correction-meta">
-        <span class="platform-tag">${c.platform}</span>
-        <span class="score-tag">${c.score}/100</span>
-      </div>
-      <div class="correction-question">${c.question}</div>
-      <div class="correction-preview">${c.content.substring(0, 120)}...</div>
-      <div class="correction-actions">
-        <button class="btn ${c.status === 'approved' ? 'btn-approved' : 'btn-approve'}" ${c.status !== 'pending' ? 'disabled' : ''}>
-          ${c.status === 'approved' ? '✓ Approved' : 'Approve'}
-        </button>
-        <button class="btn ${c.status === 'rejected' ? 'btn-rejected' : 'btn-reject'}" ${c.status !== 'pending' ? 'disabled' : ''}>
-          ${c.status === 'rejected' ? '✗ Rejected' : 'Reject'}
-        </button>
-      </div>
-    </div>`).join("");
-}
-
-// ── RUN SCRIPTS ───────────────────────────────────────────────────────────────
-async function runScript(script) {
-  if (!serverOnline) {
-    log("Cannot run — server.js is offline", "error");
-    return;
-  }
-
-  const btn = document.getElementById(`btn-${script}`);
-  if (btn) { btn.disabled = true; btn.textContent = "● Running"; }
-  log(`▶ Starting ${script}...`, "info");
-
-  try {
-    const res = await fetch(`${API}/api/run/${script}`, { method: "POST" });
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop();
-      for (const event of events) {
-        if (!event.startsWith("data:")) continue;
-        try {
-          const data = JSON.parse(event.replace("data:", "").trim());
-          if (data.type === "done") {
-            if (btn) { btn.disabled = false; btn.textContent = "▶ Run"; }
-            await loadScores();
-            await loadCorrections();
-          } else {
-            log(data.msg, data.type === "success" ? "success" : data.type === "info" ? "info" : data.type === "error" ? "error" : "");
-          }
-        } catch (e) {}
-      }
+  for (const script of CONFIG.scripts) {
+    try {
+      await runScript(script);
+      // Wait 5 seconds between scripts
+      await new Promise(r => setTimeout(r, 5000));
+    } catch (e) {
+      log(`❌ Loop aborted at ${script}: ${e.message}`);
+      return;
     }
-  } catch (e) {
-    log(`Error: ${e.message}`, "error");
-    if (btn) { btn.disabled = false; btn.textContent = "▶ Run"; }
   }
 
-  const now = new Date().toLocaleTimeString();
-  const lastEl = document.getElementById(`${script}-last`);
-  if (lastEl) lastEl.textContent = now;
+  log("════════════════════════════════════");
+  log("✅ Full loop complete — brand.aisubtext.ai updated");
+  log(`⏰ Next run in ${CONFIG.intervalDays} days`);
+  log("════════════════════════════════════");
 }
 
-// ── INIT ─────────────────────────────────────────────────────────────────────
-async function init() {
-  const online = await checkServer();
-  if (online) {
-    await loadScores();
-    await loadCorrections();
-    log("Connected to server.js — all systems ready", "success");
-  }
-  // Re-check server every 30 seconds
-  setInterval(checkServer, 30000);
+async function start() {
+  log("🚀 AIsubtext Scheduler v1.0.0 started");
+  log(`⏰ Running every ${CONFIG.intervalDays} days`);
+
+  // Run immediately on start
+  await runFullLoop();
+
+  // Then schedule every 7 days
+  const intervalMs = CONFIG.intervalDays * 24 * 60 * 60 * 1000;
+  setInterval(runFullLoop, intervalMs);
 }
 
-init();
-</script>
-</body>
-</html>
+start().catch(e => {
+  log(`❌ Scheduler crashed: ${e.message}`);
+  process.exit(1);
+});
